@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "748187352181",
+    "project_id": "kitap-takas-firebase-6fe9b",
+    "storage_bucket": "kitap-takas-firebase-6fe9b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:748187352181:android:44497f438894da874a4c3c",
+        "android_client_info": {
+          "package_name": "com.example.kitap_takas_firebase"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgnLPTvpow8WYTt5bGQLjPb7tX3qOxNSo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
