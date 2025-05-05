@@ -1,14 +1,17 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore importu eklendi
 
 class AuthService {
   // Firebase Auth instance'ını alalım
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  // Firestore instance'ını alalım
+  final FirebaseFirestore _firestore =
+      FirebaseFirestore.instance; // Firestore eklendi
 
   // Mevcut kullanıcıyı getir (veya null)
   User? get currentUser => _auth.currentUser;
 
   // Kullanıcı oturum durumu değişikliklerini dinlemek için Stream
-  // Bu, kullanıcının giriş yapıp yapmadığını veya çıkış yaptığını anlık olarak takip etmemizi sağlar.
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // E-posta ve Şifre ile Giriş Yapma
@@ -23,8 +26,6 @@ class AuthService {
       );
       return userCredential;
     } on FirebaseAuthException catch (e) {
-      // Hata durumunda null döndürebilir veya hatayı tekrar fırlatabiliriz.
-      // Şimdilik hatayı yazdırıp null döndürelim, UI tarafında yönetiriz.
       print("Giriş Hatası (AuthService): ${e.code} - ${e.message}");
       return null;
     } catch (e) {
@@ -33,15 +34,42 @@ class AuthService {
     }
   }
 
-  // E-posta ve Şifre ile Kayıt Olma
+  // E-posta ve Şifre ile Kayıt Olma (Firestore'a yazma eklendi)
   Future<UserCredential?> createUserWithEmailAndPassword(
     String email,
     String password,
   ) async {
     try {
+      // 1. Önce kullanıcıyı Auth'da oluştur
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
-      return userCredential;
+
+      // 2. Kullanıcı başarıyla oluşturulduktan SONRA Firestore'a ekle
+      if (userCredential.user != null) {
+        print("Auth kullanıcısı oluşturuldu, Firestore'a yazılıyor...");
+        try {
+          // 'users' koleksiyonuna yeni bir doküman ekle
+          // Doküman ID'si olarak kullanıcının UID'sini kullan
+          await _firestore.collection('users').doc(userCredential.user!.uid).set({
+            'uid': userCredential.user!.uid,
+            'email': email,
+            'createdAt': Timestamp.now(), // Oluşturulma zamanını ekleyelim
+            // TODO: 'username', 'bio', 'profilePicUrl' gibi alanlar eklenebilir
+          });
+          print(
+            "Kullanıcı Firestore'a başarıyla eklendi: ${userCredential.user!.uid}",
+          );
+        } catch (firestoreError) {
+          print("Firestore'a yazma hatası: $firestoreError");
+          // Opsiyonel: Firestore hatası durumunda Auth kullanıcısını silmeyi düşünebilirsin
+          // await userCredential.user?.delete();
+          // return null; // veya hatayı tekrar fırlat
+        }
+      } else {
+        print("Auth kullanıcısı oluşturuldu ama user nesnesi null geldi?");
+      }
+
+      return userCredential; // Auth sonucunu döndür
     } on FirebaseAuthException catch (e) {
       print("Kayıt Hatası (AuthService): ${e.code} - ${e.message}");
       return null;
@@ -57,8 +85,6 @@ class AuthService {
       await _auth.signOut();
     } catch (e) {
       print("Çıkış Yapma Hatası (AuthService): $e");
-      // Çıkış yapma hatası genellikle kritik değildir,
-      // ama yine de loglamak iyi bir fikirdir.
     }
   }
 
