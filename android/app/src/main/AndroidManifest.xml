@@ -1,8 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Kamera ve Galeri İzinleri Eklendi -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- Yeni Android sürümleri için ek izinler (image_picker genellikle halleder ama eklemek zarar vermez) -->
+    <!-- <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> -->
+
     <application
         android:label="kitap_takas_firebase"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:requestLegacyExternalStorage="true"> <!-- Android 10+ için galeri erişimine yardımcı olabilir -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
