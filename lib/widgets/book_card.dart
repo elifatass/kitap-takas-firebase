@@ -10,14 +10,19 @@ class BookCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme; // Tema renkleri için
+    final textTheme = Theme.of(context).textTheme; // Tema metin stilleri için
+
     return GestureDetector(
       // Tüm karta tıklama özelliği eklemek için
       onTap: onTap, // Eğer bir onTap fonksiyonu verildiyse onu çağır
       child: Card(
         elevation: 3, // Hafif bir gölge efekti
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10), // Yumuşak köşeler
+          borderRadius: BorderRadius.circular(12), // Daha yuvarlak köşeler
         ),
+        // Kartın dışına hafif bir margin ekleyerek daha ayrık durmasını sağlayabiliriz.
+        // margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch, // İçerikleri genişlet
           children: [
@@ -28,8 +33,8 @@ class BookCard extends StatelessWidget {
               child: ClipRRect(
                 // Resmi kartın köşeleriyle uyumlu kesmek için
                 borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(10),
-                ),
+                  top: Radius.circular(12),
+                ), // Sadece üst köşeleri yuvarlat
                 child:
                     book.imageUrl != null && book.imageUrl!.isNotEmpty
                         ? Image.network(
@@ -40,14 +45,16 @@ class BookCard extends StatelessWidget {
                           loadingBuilder: (context, child, loadingProgress) {
                             if (loadingProgress == null) return child;
                             return const Center(
-                              child: CircularProgressIndicator(),
-                            );
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ); // Daha ince indicator
                           },
                           errorBuilder: (context, error, stackTrace) {
-                            return const Center(
+                            return Container(
+                              // Hata durumunda daha belirgin placeholder
+                              color: Colors.grey.shade300,
                               child: Icon(
-                                Icons.broken_image,
-                                color: Colors.grey,
+                                Icons.broken_image_outlined,
+                                color: Colors.grey.shade600,
                                 size: 40,
                               ),
                             );
@@ -56,10 +63,10 @@ class BookCard extends StatelessWidget {
                         : Container(
                           // Resim yoksa varsayılan bir ikon veya placeholder göster
                           color: Colors.grey.shade200,
-                          child: const Center(
+                          child: Center(
                             child: Icon(
                               Icons.menu_book,
-                              color: Colors.grey,
+                              color: Colors.grey.shade500,
                               size: 50,
                             ),
                           ),
@@ -72,42 +79,71 @@ class BookCard extends StatelessWidget {
               // Kalan alanı bilgilere verelim
               flex: 2, // Resimden biraz daha az yer kaplasın (oran)
               child: Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.all(10.0), // Padding biraz artırıldı
                 child: Column(
                   crossAxisAlignment:
                       CrossAxisAlignment.start, // Yazıları sola yasla
+                  mainAxisAlignment:
+                      MainAxisAlignment
+                          .spaceBetween, // İçerikleri dikeyde dağıt
                   children: [
-                    // Kitap Başlığı
-                    Text(
-                      book.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14, // Grid için biraz daha küçük font
-                      ),
-                      maxLines: 2, // En fazla 2 satır
-                      overflow: TextOverflow.ellipsis, // Taşarsa ... koysun
+                    Column(
+                      // Başlık ve yazarı gruplamak için
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          book.title,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ), // Boyut ayarı
+                          maxLines: 2, // En fazla 2 satır
+                          overflow: TextOverflow.ellipsis, // Taşarsa ... koysun
+                        ),
+                        const SizedBox(height: 2), // Çok az boşluk
+                        Text(
+                          book.author,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: Colors.grey.shade700,
+                            fontSize: 11,
+                          ), // Boyut ayarı
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
 
-                    // Yazar Adı
-                    Text(
-                      book.author,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    // TODO: Belki buraya yıldız (rating) veya fiyat gibi ek bilgiler eklenebilir
-                    const Spacer(), // Kalan boşluğu doldurarak aşağıdaki butonu en alta iter
-                    // Takas Et veya Detay Butonu (Örnek)
+                    // Takasa Uygunluk Etiketi
                     Align(
                       alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: onTap, // Yine onTap'ı kullanalım
-                        child: const Text('Detaylar'),
-                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      child: Chip(
+                        label: Text(
+                          book.isAvailable ? 'Takasa Uygun' : 'Takasta Değil',
+                          style: TextStyle(
+                            fontSize: 10, // Font boyutu biraz küçültüldü
+                            color:
+                                book.isAvailable
+                                    ? Colors.white
+                                    : Colors.white70,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        backgroundColor:
+                            book.isAvailable
+                                ? colorScheme.primary
+                                : Colors.grey.shade500,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 0,
+                        ), // Daha küçük padding
+                        materialTapTargetSize:
+                            MaterialTapTargetSize
+                                .shrinkWrap, // Tıklama alanını küçült
+                        labelPadding: const EdgeInsets.symmetric(
+                          horizontal: 4.0,
+                        ), // Label için padding
+                        visualDensity:
+                            VisualDensity.compact, // Daha kompakt görünüm
                       ),
                     ),
                   ],

@@ -1,55 +1,47 @@
-import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore için gerekli
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:kitap_takas_firebase/services/auth_service.dart';
-import 'package:kitap_takas_firebase/services/firestore_service.dart'; // Firestore servisi
-import 'package:kitap_takas_firebase/models/book_model.dart'; // Book modeli
-import 'package:kitap_takas_firebase/widgets/book_card.dart'; // Kitap Kartı
-import 'add_book_screen.dart'; // Kitap ekleme ekranını import et
-
-// TODO: Kitap ekleme ve detay ekranlarını import edeceğiz
-// import 'add_book_screen.dart';
-// import 'book_detail_screen.dart';
+import 'package:kitap_takas_firebase/services/firestore_service.dart';
+import 'package:kitap_takas_firebase/models/book_model.dart';
+import 'package:kitap_takas_firebase/widgets/book_card.dart';
+import 'book_detail_screen.dart'; // BookDetailScreen importu eklendi/aktif edildi
+// TODO: Kitap ekleme ekranını import edeceğiz
+import 'add_book_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   HomeScreen({Key? key}) : super(key: key);
 
   final AuthService _authService = AuthService();
-  final FirestoreService _firestoreService =
-      FirestoreService(); // FirestoreService eklendi
+  final FirestoreService _firestoreService = FirestoreService();
   final User? _currentUser = FirebaseAuth.instance.currentUser;
 
-  // Çıkış yapma fonksiyonu
+  // Çıkış yapma fonksiyonu (Aynı kaldı)
   void _signOut(BuildContext context) async {
     print("AppBar Çıkış Yap butonuna basıldı.");
     await _authService.signOut();
   }
 
-  // Kitap ekleme sayfasına gitme fonksiyonu
-  // Kitap ekleme sayfasına gitme fonksiyonu
+  // Kitap ekleme sayfasına gitme fonksiyonu (Aynı kaldı)
   void _goToAddBookScreen(BuildContext context) {
     print("Kitap Ekle butonuna basıldı.");
-    // ESKİ KODU SİL:
-    // ScaffoldMessenger.of(context).showSnackBar(
-    //    const SnackBar(content: Text('Kitap Ekleme ekranı henüz hazır değil!')),
-    // );
-
-    // YENİ KODU EKLE:
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const AddBookScreen()),
     );
+    // Navigator.push(context, MaterialPageRoute(builder: (context) => AddBookScreen()));
   }
 
-  // Kitap detay sayfasına gitme fonksiyonu (Örnek)
+  // Kitap detay sayfasına gitme fonksiyonu (GÜNCELLENDİ)
   void _goToBookDetail(BuildContext context, String bookId) {
-    print("Kitap tıklandı: $bookId");
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Kitap detay ekranı henüz hazır değil! (ID: $bookId)'),
-      ),
+    print(
+      "Kitap kartına tıklandı, ID: $bookId -> Detay ekranına yönlendiriliyor.",
     );
-    // Navigator.push(context, MaterialPageRoute(builder: (context) => BookDetailScreen(bookId: bookId)));
+    // Navigator ile BookDetailScreen'e git ve bookId'yi gönder
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => BookDetailScreen(bookId: bookId)),
+    );
   }
 
   @override
@@ -59,6 +51,7 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
+        // AppBar (Aynı kaldı)
         title: Text(
           'KitapDünyası Takas',
           style: TextStyle(
@@ -95,6 +88,7 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
       body: Padding(
+        // Body (Aynı kaldı)
         padding: const EdgeInsets.symmetric(horizontal: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,7 +109,7 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             TextField(
-              // Arama Çubuğu (Aynı kaldı)
+              // Arama çubuğu (Aynı kaldı)
               decoration: InputDecoration(
                 hintText: 'Kitap adı, yazar veya ISBN ara...',
                 prefixIcon: const Icon(Icons.search, size: 20),
@@ -157,9 +151,8 @@ class HomeScreen extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
-
-            // --- KİTAP LİSTESİ ALANI (StreamBuilder ile Güncellendi) ---
             Expanded(
+              // Kitap Listesi Alanı - StreamBuilder (Aynı kaldı, BookCard içindeki onTap güncellendi)
               child: StreamBuilder<QuerySnapshot>(
                 stream: _firestoreService.getAvailableBooksStream(),
                 builder: (context, snapshot) {
@@ -184,9 +177,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                     );
                   }
-
                   final List<DocumentSnapshot> documents = snapshot.data!.docs;
-
                   return GridView.builder(
                     padding: const EdgeInsets.only(top: 10, bottom: 16),
                     gridDelegate:
@@ -202,14 +193,17 @@ class HomeScreen extends StatelessWidget {
                       final book = Book.fromFirestore(doc);
                       return BookCard(
                         book: book,
-                        onTap: () => _goToBookDetail(context, book.id),
+                        onTap:
+                            () => _goToBookDetail(
+                              context,
+                              book.id,
+                            ), // Burası önemli, tıklanınca _goToBookDetail çağrılıyor
                       );
                     },
                   );
                 },
               ),
             ),
-            // --- StreamBuilder Sonu ---
           ],
         ),
       ),
@@ -222,7 +216,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Kategori Chip'i (Aynı kaldı)
+  // Kategori Chip'i metodu (Aynı kaldı)
   Widget _buildCategoryChip(
     BuildContext context,
     String label,

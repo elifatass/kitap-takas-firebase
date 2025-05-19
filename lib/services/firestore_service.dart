@@ -13,21 +13,22 @@ class FirestoreService {
   final CollectionReference _booksCollection = FirebaseFirestore.instance
       .collection('books');
 
-  // Yeni Kitap Ekleme
+  // Yeni Kitap Ekleme (GÜNCELLENDİ)
   Future<void> addBook({
     required String title,
     required String author,
     required String description,
     String? imageUrl, // Opsiyonel resim URL'si
-    // TODO: Diğer kitap alanları eklenebilir (ISBN, durum, kategori vb.)
+    String? category, // YENİ PARAMETRE: Kitabın kategorisi (opsiyonel)
   }) async {
     try {
       // Giriş yapmış kullanıcının UID'sini al
       String? userId = _auth.currentUser?.uid;
       if (userId == null) {
         print("Hata: Kitap eklemek için kullanıcı girişi gerekli.");
-        // İdeal olarak burada bir hata fırlatılabilir veya null döndürülebilir
-        return;
+        throw Exception(
+          "Kullanıcı girişi yapılmamış.",
+        ); // Hata fırlatmak daha iyi
       }
 
       // Yeni kitap dokümanı oluştur
@@ -39,9 +40,10 @@ class FirestoreService {
         'ownerId': userId, // Kitabı ekleyen kullanıcının ID'si
         'createdAt': Timestamp.now(), // Eklenme zamanı
         'isAvailable': true, // Başlangıçta takasa uygun
-        // TODO: Diğer alanlar...
+        'category':
+            category, // YENİ ALAN: Kategori Firestore'a yazılıyor (null olabilir)
       });
-      print("Kitap başarıyla Firestore'a eklendi.");
+      print("Kitap (kategori ile) başarıyla Firestore'a eklendi.");
     } catch (e) {
       print("Firestore'a kitap ekleme hatası: $e");
       // Hata yönetimi UI tarafında yapılabilir veya burada Exception fırlatılabilir
@@ -50,14 +52,11 @@ class FirestoreService {
   }
 
   // Tüm Kitapları Getirme (Stream olarak - anlık güncellemeler için)
-  // Şimdilik sadece takasa uygun olanları getirelim
   Stream<QuerySnapshot> getAvailableBooksStream() {
-    // 'books' koleksiyonundaki 'isAvailable' alanı true olanları getir,
-    // eklenme zamanına göre en yeniden eskiye doğru sırala.
     return _booksCollection
         .where('isAvailable', isEqualTo: true)
         .orderBy('createdAt', descending: true)
-        .snapshots(); // snapshots() metodu bir Stream döndürür
+        .snapshots();
   }
 
   // Belirli Bir Kitabı Getirme (Future olarak - tek seferlik okuma)
@@ -70,20 +69,14 @@ class FirestoreService {
       return doc;
     } catch (e) {
       print("Kitap getirme hatası: $e");
-      rethrow; // Hatayı tekrar fırlat ki çağıran yer haberdar olsun
+      rethrow;
     }
   }
 
-  // TODO: Kitap Güncelleme (updateBook) fonksiyonu eklenebilir
-  // TODO: Kitap Silme (deleteBook) fonksiyonu eklenebilir
-  // TODO: Kullanıcının Kendi Kitaplarını Getirme fonksiyonu eklenebilir
-
   // --- Kullanıcı Profili İşlemleri ---
-  // Kullanıcılar koleksiyonuna referans
   final CollectionReference _usersCollection = FirebaseFirestore.instance
       .collection('users');
 
-  // Kullanıcı profil verisini getirme
   Future<DocumentSnapshot?> getUserProfile(String uid) async {
     try {
       DocumentSnapshot doc = await _usersCollection.doc(uid).get();
@@ -94,7 +87,6 @@ class FirestoreService {
     }
   }
 
-  // Kullanıcı profilini güncelleme
   Future<void> updateUserProfile(String uid, Map<String, dynamic> data) async {
     try {
       await _usersCollection.doc(uid).update(data);
@@ -104,6 +96,4 @@ class FirestoreService {
       throw Exception("Profil güncellenirken bir hata oluştu: $e");
     }
   }
-
-  // Not: Yeni kullanıcı kaydında profil oluşturma işlemi AuthService içinde yapılmıştı.
 }

@@ -1,10 +1,7 @@
-import 'dart:io'; // File tipi için
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // ImageSource için
-import 'package:kitap_takas_firebase/services/firestore_service.dart'; // Firestore servisi
-import 'package:kitap_takas_firebase/services/image_picker_service.dart'; // Image Picker servisi
-// TODO: Storage servisini import edeceğiz
-// import 'package:kitap_takas_firebase/services/storage_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:kitap_takas_firebase/services/firestore_service.dart';
 
 class AddBookScreen extends StatefulWidget {
   const AddBookScreen({Key? key}) : super(key: key);
@@ -19,16 +16,25 @@ class _AddBookScreenState extends State<AddBookScreen> {
   final _authorController = TextEditingController();
   final _descriptionController = TextEditingController();
 
-  // Servisleri başlatalım
-  final ImagePickerService _imagePickerService = ImagePickerService();
   final FirestoreService _firestoreService = FirestoreService();
-  // TODO: Storage servisini başlatalım
-  // final StorageService _storageService = StorageService();
 
-  // Seçilen resim dosyasını tutacak değişken
   File? _selectedImage;
-  // Yükleme durumu
   bool _isLoading = false;
+
+  // Kategoriler için bir liste ve seçilen kategoriyi tutacak değişken
+  final List<String> _categories = [
+    'Roman',
+    'Bilim Kurgu',
+    'Fantastik',
+    'Tarih',
+    'Biyografi',
+    'Çocuk Kitapları',
+    'Eğitim',
+    'Kişisel Gelişim',
+    'Şiir',
+    'Diğer',
+  ];
+  String? _selectedCategory; // Başlangıçta null
 
   @override
   void dispose() {
@@ -38,27 +44,22 @@ class _AddBookScreenState extends State<AddBookScreen> {
     super.dispose();
   }
 
-  // Resim seçme fonksiyonu
   Future<void> _pickImage(ImageSource source) async {
-    File? image = await _imagePickerService.pickImage(source: source);
-    if (image != null) {
+    final ImagePicker picker = ImagePicker();
+    final XFile? imageXFile = await picker.pickImage(source: source);
+
+    if (imageXFile != null) {
       setState(() {
-        _selectedImage = image; // Seçilen resmi state'e ata
+        _selectedImage = File(imageXFile.path);
       });
+    } else {
+      print("Resim seçilmedi (AddBookScreen)");
     }
   }
 
-  // Kitap ekleme fonksiyonu
   Future<void> _addBook() async {
+    // Formun geçerli olup olmadığını kontrol et (Kategori de dahil)
     if (!_formKey.currentState!.validate()) {
-      return; // Form geçerli değilse çık
-    }
-
-    if (_selectedImage == null) {
-      // Resim seçilmemişse uyarı ver (isteğe bağlı, resimsiz de eklenebilir)
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Lütfen bir kitap kapağı resmi seçin.')),
-      );
       return;
     }
 
@@ -67,31 +68,26 @@ class _AddBookScreenState extends State<AddBookScreen> {
     });
 
     try {
-      // 1. Resmi Firebase Storage'a yükle (Bu fonksiyonu ekleyeceğiz)
-      // String? imageUrl = await _storageService.uploadBookImage(_selectedImage!);
-      // if (imageUrl == null) {
-      //   throw Exception("Resim yüklenemedi.");
-      // }
-      // Şimdilik geçici URL kullanalım veya null bırakalım
-      String? imageUrl = null; // <<-- Şimdilik null
-      print("Resim yükleme adımı şimdilik atlandı.");
+      String? imageUrl = null; // Resim yükleme şimdilik atlanıyor
 
-      // 2. Kitap bilgilerini Firestore'a kaydet
       await _firestoreService.addBook(
         title: _titleController.text.trim(),
         author: _authorController.text.trim(),
         description: _descriptionController.text.trim(),
-        imageUrl: imageUrl, // Yüklenen resmin URL'si veya null
+        imageUrl: imageUrl,
+        category: _selectedCategory, // SEÇİLEN KATEGORİYİ GÖNDER
       );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Kitap başarıyla eklendi!'),
+            content: Text(
+              'Kitap (kategorili, resimsiz) başarıyla eklendi!',
+            ), // Mesaj güncellendi
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.pop(context); // Başarılı eklemeden sonra geri dön
+        Navigator.pop(context);
       }
     } catch (e) {
       print("Kitap ekleme hatası: $e");
@@ -123,26 +119,21 @@ class _AddBookScreenState extends State<AddBookScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Resim Seçme Alanı
+              // Resim Seçme Alanı (Aynı kaldı)
               GestureDetector(
                 onTap: () {
-                  // Resim seçme seçeneklerini göster (örn: bottom sheet)
                   showModalBottomSheet(
                     context: context,
                     builder:
                         (context) => SafeArea(
-                          // Alt çubukların arkasına geçmemesi için
                           child: Wrap(
-                            // Seçenekleri yan yana sığdırmak için
                             children: <Widget>[
                               ListTile(
                                 leading: const Icon(Icons.photo_library),
                                 title: const Text('Galeriden Seç'),
                                 onTap: () {
                                   _pickImage(ImageSource.gallery);
-                                  Navigator.of(
-                                    context,
-                                  ).pop(); // Bottom sheet'i kapat
+                                  Navigator.of(context).pop();
                                 },
                               ),
                               ListTile(
@@ -150,9 +141,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
                                 title: const Text('Kamera ile Çek'),
                                 onTap: () {
                                   _pickImage(ImageSource.camera);
-                                  Navigator.of(
-                                    context,
-                                  ).pop(); // Bottom sheet'i kapat
+                                  Navigator.of(context).pop();
                                 },
                               ),
                             ],
@@ -170,17 +159,13 @@ class _AddBookScreenState extends State<AddBookScreen> {
                   child:
                       _selectedImage != null
                           ? ClipRRect(
-                            // Resmi yuvarlak köşeli göstermek için
                             borderRadius: BorderRadius.circular(12),
                             child: Image.file(
                               _selectedImage!,
-                              fit:
-                                  BoxFit
-                                      .cover, // Resmi kaplayacak şekilde sığdır
+                              fit: BoxFit.cover,
                             ),
                           )
                           : const Center(
-                            // Resim seçilmemişse
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -190,7 +175,7 @@ class _AddBookScreenState extends State<AddBookScreen> {
                                   color: Colors.grey,
                                 ),
                                 SizedBox(height: 8),
-                                Text('Kapak Resmi Seçin'),
+                                Text('Kapak Resmi Seç (Opsiyonel)'),
                               ],
                             ),
                           ),
@@ -198,8 +183,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Kitap Başlığı
               TextFormField(
+                // Başlık (Aynı kaldı)
                 controller: _titleController,
                 decoration: InputDecoration(
                   labelText: 'Kitap Başlığı',
@@ -215,8 +200,8 @@ class _AddBookScreenState extends State<AddBookScreen> {
               ),
               const SizedBox(height: 15),
 
-              // Yazar Adı
               TextFormField(
+                // Yazar (Aynı kaldı)
                 controller: _authorController,
                 decoration: InputDecoration(
                   labelText: 'Yazar Adı',
@@ -232,33 +217,63 @@ class _AddBookScreenState extends State<AddBookScreen> {
               ),
               const SizedBox(height: 15),
 
-              // Açıklama
               TextFormField(
+                // Açıklama (Aynı kaldı)
                 controller: _descriptionController,
                 decoration: InputDecoration(
                   labelText: 'Açıklama',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  alignLabelWithHint:
-                      true, // Çok satırlı için label'ı üste hizala
+                  alignLabelWithHint: true,
                 ),
-                maxLines: 4, // Daha fazla satır
+                maxLines: 4,
                 validator:
                     (value) =>
                         value == null || value.isEmpty
                             ? 'Açıklama boş olamaz'
                             : null,
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 15), // Açıklama ve Kategori arası boşluk
+              // KATEGORİ SEÇİMİ DROPDOWN (YENİ EKLENDİ)
+              DropdownButtonFormField<String>(
+                decoration: InputDecoration(
+                  labelText: 'Kategori',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                value: _selectedCategory,
+                hint: const Text('Bir kategori seçin'),
+                isExpanded: true,
+                items:
+                    _categories.map((String category) {
+                      return DropdownMenuItem<String>(
+                        value: category,
+                        child: Text(category),
+                      );
+                    }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedCategory = newValue;
+                  });
+                },
+                validator:
+                    (value) =>
+                        value == null
+                            ? 'Lütfen bir kategori seçin'
+                            : null, // Zorunlu alan
+              ),
 
-              // Kitabı Ekle Butonu
+              // KATEGORİ SEÇİMİ DROPDOWN SONU
+              const SizedBox(height: 30), // Kategori ve Buton arası boşluk
+
               ElevatedButton.icon(
+                // Kitabı Ekle Butonu (Aynı kaldı)
                 onPressed: _isLoading ? null : _addBook,
                 icon:
                     _isLoading
                         ? Container(
-                          // Dönen ikon için boyut belirle
                           width: 24,
                           height: 24,
                           padding: const EdgeInsets.all(2.0),
