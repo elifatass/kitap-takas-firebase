@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:kitap_takas_firebase/models/book_model.dart';
-import 'package:kitap_takas_firebase/services/firestore_service.dart';
-// User? tipini kullanabilmek için firebase_auth importu gerekebilir
-import 'package:firebase_auth/firebase_auth.dart'; // Kullanıcı bilgisini almak için
+import 'package:cloud_firestore/cloud_firestore.dart'; // DocumentSnapshot için
+import 'package:kitap_takas_firebase/models/book_model.dart'; // Book modeli
+import 'package:kitap_takas_firebase/services/firestore_service.dart'; // Firestore servisi
+import 'package:kitap_takas_firebase/services/auth_service.dart'; // AuthService'i import et
 
 class BookDetailScreen extends StatefulWidget {
-  final String bookId;
+  final String bookId; // Detayları gösterilecek kitabın ID'si
 
   const BookDetailScreen({Key? key, required this.bookId}) : super(key: key);
 
@@ -16,9 +15,10 @@ class BookDetailScreen extends StatefulWidget {
 
 class _BookDetailScreenState extends State<BookDetailScreen> {
   final FirestoreService _firestoreService = FirestoreService();
+  final AuthService _authService =
+      AuthService(); // AuthService instance'ı eklendi
   Future<Book?>? _bookFuture;
-  // Kitabı ekleyen kullanıcı bilgisini tutacak Future (DocumentSnapshot olarak)
-  Future<DocumentSnapshot?>? _ownerProfileFuture;
+  bool _isOffering = false; // Teklif gönderme sırasında yüklenme durumu için
 
   @override
   void initState() {
@@ -30,13 +30,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     try {
       DocumentSnapshot doc = await _firestoreService.getBookById(widget.bookId);
       if (doc.exists) {
-        Book book = Book.fromFirestore(doc);
-        // Kitap verisi çekildikten sonra, kitabı ekleyen kullanıcının profilini de çek
-        if (mounted) {
-          // State'in hala var olduğundan emin ol
-          _fetchOwnerProfile(book.ownerId);
-        }
-        return book;
+        return Book.fromFirestore(doc);
       } else {
         print("Kitap bulunamadı (ID: ${widget.bookId})");
         return null;
@@ -47,250 +41,219 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     }
   }
 
-  // Kitabı ekleyen kullanıcının profilini çekme fonksiyonu
-  void _fetchOwnerProfile(String ownerId) {
-    // setState kullanarak _ownerProfileFuture'ı güncelliyoruz ki UI yenilensin
-    if (mounted) {
-      setState(() {
-        _ownerProfileFuture = _firestoreService.getUserProfile(ownerId);
-      });
+  // Takas teklifi gönderme fonksiyonu
+  Future<void> _handleOffer(Book offeredToBook) async {
+    String? currentUserId = _authService.currentUser?.uid;
+
+    if (currentUserId == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Teklif yapmak için giriş yapmalısınız.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (currentUserId == offeredToBook.ownerId) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Kendi kitabınıza takas teklifi yapamazsınız.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() {
+      _isOffering = true; // Yükleniyor durumunu başlat
+    });
+
+    try {
+      await _firestoreService.createOffer(
+        targetBookId: offeredToBook.id,
+        targetBookOwnerId: offeredToBook.ownerId,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Takas teklifiniz başarıyla gönderildi!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // İsteğe bağlı: Tekliften sonra bir yere yönlendir veya pop-up kapat
+        // Navigator.pop(context); // Geri dönebilir veya ana sayfaya gidebilir
+      }
+    } catch (e) {
+      print("Takas teklifi hatası (UI): $e");
+      String errorMessage = e.toString().replaceFirst(
+        "Exception: ",
+        "",
+      ); // "Exception: " kısmını kaldır
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Teklif gönderilirken bir hata oluştu: $errorMessage',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isOffering = false; // Yükleniyor durumunu bitir
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Kitap Detayı')),
+      appBar: AppBar(title: const Text('Kitap Detayları')),
       body: FutureBuilder<Book?>(
         future: _bookFuture,
-        builder: (context, bookSnapshot) {
-          // snapshot adını değiştirdim karışmasın diye
-          if (bookSnapshot.connectionState == ConnectionState.waiting) {
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (bookSnapshot.hasError ||
-              !bookSnapshot.hasData ||
-              bookSnapshot.data == null) {
+          if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
             return Center(
-              // ... (hata mesajı kısmı aynı) ...
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  bookSnapshot.hasError
-                      ? 'Detaylar yüklenirken bir hata oluştu.\nLütfen daha sonra tekrar deneyin.'
-                      : 'Bu kitap artık mevcut değil veya bulunamadı.',
-                  textAlign: TextAlign.center,
-                  style: textTheme.titleMedium,
-                ),
+              child: Text(
+                snapshot.hasError
+                    ? 'Kitap yüklenirken bir hata oluştu: ${snapshot.error}'
+                    : 'Kitap bulunamadı veya yüklenemedi.',
+                textAlign: TextAlign.center,
               ),
             );
           }
 
-          final Book book = bookSnapshot.data!;
+          final Book book = snapshot.data!;
 
           return SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Kitap Kapağı Alanı (Aynı kaldı)
-                Container(
-                  height: 300,
-                  color: Colors.grey.shade200,
-                  child:
-                      book.imageUrl != null && book.imageUrl!.isNotEmpty
-                          ? Hero(
-                            tag: 'bookImage_${book.id}',
-                            child: Image.network(
-                              book.imageUrl!,
-                              fit: BoxFit.contain,
-                              loadingBuilder: (
-                                context,
-                                child,
-                                loadingProgress,
-                              ) {
-                                if (loadingProgress == null) return child;
-                                return const Center(
-                                  child: CircularProgressIndicator(),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return const Center(
-                                  child: Icon(
-                                    Icons.broken_image_outlined,
-                                    size: 60,
-                                    color: Colors.grey,
-                                  ),
-                                );
-                              },
-                            ),
-                          )
-                          : const Center(
-                            child: Icon(
-                              Icons.menu_book,
-                              size: 100,
-                              color: Colors.grey,
-                            ),
-                          ),
-                ),
-                const SizedBox(height: 16),
-
-                // Kitap Bilgileri
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        book.title,
-                        style: textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Yazan: ${book.author}',
-                        style: textTheme.titleMedium?.copyWith(
-                          color: Colors.grey.shade700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Chip(
-                        // Takasa uygunluk durumu (Aynı kaldı)
-                        avatar: Icon(
-                          book.isAvailable
-                              ? Icons.check_circle_outline
-                              : Icons.cancel_outlined,
-                          color:
-                              book.isAvailable
-                                  ? Colors.green.shade700
-                                  : Colors.red.shade700,
-                          size: 18,
-                        ),
-                        label: Text(
-                          book.isAvailable ? 'Takasa Uygun' : 'Takasta Değil',
-                          style: TextStyle(
-                            color:
-                                book.isAvailable
-                                    ? Colors.green.shade900
-                                    : Colors.red.shade900,
-                          ),
-                        ),
-                        backgroundColor:
-                            book.isAvailable
-                                ? Colors.green.shade100
-                                : Colors.red.shade100,
-                        side: BorderSide.none,
-                      ),
-                      const SizedBox(height: 16),
-                      Divider(color: Colors.grey.shade300),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Açıklama',
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        book.description.isNotEmpty
-                            ? book.description
-                            : 'Açıklama bulunmuyor.',
-                        style: textTheme.bodyLarge?.copyWith(height: 1.5),
-                      ),
-                      const SizedBox(height: 20),
-
-                      // --- Ekleyen Kullanıcı Bilgisi (YENİ EKLENDİ) ---
-                      Text(
-                        'Kitabı Ekleyen:',
-                        style: textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      FutureBuilder<DocumentSnapshot?>(
-                        future:
-                            _ownerProfileFuture, // Sahip profilini çekmek için Future
-                        builder: (context, ownerSnapshot) {
-                          if (ownerSnapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Text(
-                              'Kullanıcı bilgisi yükleniyor...',
-                            );
-                          }
-                          if (ownerSnapshot.hasError ||
-                              !ownerSnapshot.hasData ||
-                              ownerSnapshot.data == null) {
-                            return const Text(
-                              'Kullanıcı bilgisi bulunamadı.',
-                              style: TextStyle(color: Colors.grey),
-                            );
-                          }
-                          // Firestore'dan gelen kullanıcı verisini al
-                          final ownerData =
-                              ownerSnapshot.data!.data()
-                                  as Map<String, dynamic>?;
-                          final ownerEmail =
-                              ownerData?['email'] as String? ?? 'Bilinmiyor';
-
-                          return Row(
-                            // İkon ve e-posta yan yana
-                            children: [
-                              Icon(
-                                Icons.person_outline,
-                                size: 18,
-                                color: Colors.grey.shade700,
+                // Kitap Resmi (Aynı kaldı)
+                if (book.imageUrl != null && book.imageUrl!.isNotEmpty)
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12.0),
+                      child: Image.network(
+                        book.imageUrl!,
+                        height: 250,
+                        fit: BoxFit.contain,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return const SizedBox(
+                            height: 250,
+                            child: Center(child: CircularProgressIndicator()),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 250,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                size: 50,
+                                color: Colors.grey,
                               ),
-                              const SizedBox(width: 6),
-                              Text(ownerEmail, style: textTheme.bodyMedium),
-                            ],
+                            ),
                           );
                         },
                       ),
-
-                      // --- Ekleyen Kullanıcı Bilgisi SONU ---
-                      const SizedBox(
-                        height: 24,
-                      ), // Buton için biraz daha boşluk
-                      // Takas Teklif Et Butonu (Aynı kaldı)
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed:
-                              book.isAvailable
-                                  ? () {
-                                    print(
-                                      "Takas teklif et butonuna basıldı: ${book.title}",
-                                    );
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                          'Takas teklifi özelliği henüz hazır değil!',
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                  : null,
-                          icon: const Icon(Icons.swap_horiz_rounded),
-                          label: const Text('Takas Teklif Et'),
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            textStyle: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            backgroundColor: colorScheme.primary,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
+                    ),
+                  )
+                else
+                  Center(
+                    child: Container(
+                      height: 250,
+                      width: 180,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        borderRadius: BorderRadius.circular(12.0),
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.menu_book,
+                          size: 80,
+                          color: Colors.grey,
                         ),
                       ),
-                      const SizedBox(height: 20),
-                    ],
+                    ),
+                  ),
+                const SizedBox(height: 20),
+
+                // Kitap Başlığı (Aynı kaldı)
+                Text(
+                  book.title,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                // Yazar Adı (Aynı kaldı)
+                Text(
+                  'Yazar: ${book.author}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 16),
+
+                // Açıklama (Aynı kaldı)
+                Text(
+                  'Açıklama:',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  book.description,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 20),
+
+                // Takas Teklif Et Butonu (onPressed güncellendi)
+                Center(
+                  child: ElevatedButton.icon(
+                    onPressed:
+                        _isOffering
+                            ? null
+                            : () =>
+                                _handleOffer(book), // Yükleniyorsa tıklanamaz
+                    icon:
+                        _isOffering
+                            ? Container(
+                              // Yüklenme göstergesi
+                              width: 20,
+                              height: 20,
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                            : const Icon(Icons.swap_horiz),
+                    label: Text(
+                      _isOffering ? 'Gönderiliyor...' : 'Takas Teklif Et',
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 30,
+                        vertical: 12,
+                      ),
+                      textStyle: const TextStyle(fontSize: 16),
+                    ),
                   ),
                 ),
               ],

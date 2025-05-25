@@ -1,40 +1,30 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Firebase Auth paketini import et
+import 'package:firebase_auth/firebase_auth.dart'; // UserCredential için
+import 'package:kitap_takas_firebase/services/auth_service.dart'; // AuthService'i import et
 
 class RegisterScreen extends StatefulWidget {
-  // onTap fonksiyonu artık required ve non-nullable
   final void Function() onTap;
-  const RegisterScreen({Key? key, required this.onTap})
-    : super(key: key); // Constructor'a onTap eklendi
+  const RegisterScreen({Key? key, required this.onTap}) : super(key: key);
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  // Form alanları için TextEditingController'lar
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  // final _confirmPasswordController = TextEditingController();
-
-  // Formun durumunu yönetmek için GlobalKey
   final _formKey = GlobalKey<FormState>();
-
-  // Kayıt işlemi yükleniyor mu?
   bool _isLoading = false;
 
-  // FirebaseAuth instance
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AuthService _authService = AuthService(); // AuthService instance'ı
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    // _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  // Firebase kayıt fonksiyonu
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -48,48 +38,63 @@ class _RegisterScreenState extends State<RegisterScreen> {
       String email = _emailController.text.trim();
       String password = _passwordController.text.trim();
 
-      UserCredential userCredential = await _auth
-          .createUserWithEmailAndPassword(email: email, password: password);
+      // DÜZELTİLMİŞ ÇAĞRI: Parametreler pozisyonel olarak gönderiliyor
+      UserCredential? userCredential = await _authService
+          .createUserWithEmailAndPassword(
+            email, // Sadece email değişkeni
+            password, // Sadece password değişkeni
+          );
 
-      print('Kayıt Başarılı: ${userCredential.user?.uid}');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Kayıt başarıyla tamamlandı! Giriş yapabilirsiniz.',
-            ), // Mesaj güncellendi
-            backgroundColor: Colors.green,
-          ),
+      if (userCredential != null && userCredential.user != null) {
+        print(
+          'RegisterScreen: Kayıt Başarılı (Auth ve muhtemelen Firestore). UID: ${userCredential.user?.uid}',
         );
-        // Başarılı kayıttan sonra otomatik olarak giriş sayfasına geçiş yapalım
-        widget.onTap(); // onTap fonksiyonunu çağırarak Login'e geçişi tetikle
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Kayıt başarıyla tamamlandı! Giriş yapabilirsiniz.',
+              ),
+              backgroundColor: Colors.green,
+            ),
+          );
+          widget.onTap(); // Giriş ekranına geç
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Kayıt sırasında bir sorun oluştu. Lütfen tekrar deneyin.',
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        print(
+          'RegisterScreen: AuthService\'ten null UserCredential döndü veya user null.',
+        );
       }
     } on FirebaseAuthException catch (e) {
-      print('Kayıt Hatası Kodu: ${e.code}');
-      print('Kayıt Hatası Mesajı: ${e.message}');
-
-      String errorMessage = 'Bir hata oluştu, lütfen tekrar deneyin.';
-      if (e.code == 'weak-password') {
-        errorMessage = 'Girdiğiniz şifre çok zayıf.';
-      } else if (e.code == 'email-already-in-use') {
-        errorMessage =
-            'Bu e-posta adresi zaten başka bir hesap tarafından kullanılıyor.';
-      } else if (e.code == 'invalid-email') {
-        errorMessage = 'Girdiğiniz e-posta adresi geçersiz.';
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(errorMessage), backgroundColor: Colors.red),
-        );
-      }
-    } catch (e) {
-      print('Beklenmedik Kayıt Hatası: $e');
+      print(
+        'RegisterScreen: Beklenmeyen FirebaseAuthException (AuthService\'ten sonra): ${e.code}',
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Beklenmedik bir hata oluştu: ${e.toString()}'),
+            content: Text(
+              'Kayıt hatası: ${e.message ?? "Bilinmeyen bir Firebase hatası."}',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('RegisterScreen: _register içinde Beklenmedik Genel Hata: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Kayıt sırasında beklenmedik bir hata oluştu.'),
             backgroundColor: Colors.red,
           ),
         );
@@ -108,7 +113,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Kayıt Ol'),
-        automaticallyImplyLeading: false, // Geri butonunu gösterme
+        automaticallyImplyLeading: false,
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -131,22 +136,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: const InputDecoration(
                     labelText: 'E-posta',
                     hintText: 'eposta@adresiniz.com',
-                    prefixIcon: Icon(Icons.email_outlined), // Outlined ikon
+                    prefixIcon: Icon(Icons.email_outlined),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(12),
-                      ), // Yuvarlak köşe
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                     filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
+                    fillColor: Color(0xFFF5F5F5),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return 'Lütfen e-posta adresinizi girin';
-                    }
-                    if (!value.contains('@') || !value.contains('.')) {
+                    if (!value.contains('@') || !value.contains('.'))
                       return 'Geçerli bir e-posta adresi girin';
-                    }
                     return null;
                   },
                 ),
@@ -156,26 +157,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   obscureText: true,
                   decoration: const InputDecoration(
                     labelText: 'Şifre',
-                    prefixIcon: Icon(Icons.lock_outline), // Outlined ikon
+                    prefixIcon: Icon(Icons.lock_outline),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(12),
-                      ), // Yuvarlak köşe
+                      borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
                     filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
+                    fillColor: Color(0xFFF5F5F5),
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.isEmpty)
                       return 'Lütfen bir şifre girin';
-                    }
-                    if (value.length < 6) {
+                    if (value.length < 6)
                       return 'Şifre en az 6 karakter olmalıdır';
-                    }
                     return null;
                   },
                 ),
-                // TODO: Şifre Tekrarı alanı eklenebilir
                 const SizedBox(height: 30),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _register,
@@ -204,14 +200,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 const SizedBox(height: 20),
                 Row(
-                  // Ortalamak için
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text("Zaten hesabın var mı?"),
                     TextButton(
-                      // Yüklenirken tıklanmasın ve widget.onTap fonksiyonunu çağırsın
-                      onPressed:
-                          _isLoading ? null : widget.onTap, // DEĞİŞİKLİK BURADA
+                      onPressed: _isLoading ? null : widget.onTap,
                       child: Text(
                         'Giriş Yap',
                         style: TextStyle(

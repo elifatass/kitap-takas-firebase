@@ -1,12 +1,11 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore importu eklendi
+import 'package:cloud_firestore/cloud_firestore.dart'; // Firestore importu
 
 class AuthService {
   // Firebase Auth instance'ını alalım
   final FirebaseAuth _auth = FirebaseAuth.instance;
   // Firestore instance'ını alalım
-  final FirebaseFirestore _firestore =
-      FirebaseFirestore.instance; // Firestore eklendi
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // Mevcut kullanıcıyı getir (veya null)
   User? get currentUser => _auth.currentUser;
@@ -26,27 +25,40 @@ class AuthService {
       );
       return userCredential;
     } on FirebaseAuthException catch (e) {
-      print("Giriş Hatası (AuthService): ${e.code} - ${e.message}");
+      print(
+        "AuthService: signInWithEmailAndPassword Hatası: ${e.code} - ${e.message}",
+      );
       return null;
     } catch (e) {
-      print("Beklenmedik Giriş Hatası (AuthService): $e");
+      print(
+        "AuthService: signInWithEmailAndPassword içinde Beklenmedik Hata: $e",
+      );
       return null;
     }
   }
 
-  // E-posta ve Şifre ile Kayıt Olma (Firestore'a yazma eklendi)
+  // E-posta ve Şifre ile Kayıt Olma (Firestore'a yazma ve detaylı loglama eklendi)
   Future<UserCredential?> createUserWithEmailAndPassword(
     String email,
     String password,
   ) async {
+    print(
+      "AuthService: createUserWithEmailAndPassword çağrıldı - Email: $email",
+    ); // BAŞLANGIÇ LOGU
     try {
       // 1. Önce kullanıcıyı Auth'da oluştur
+      print("AuthService: Firebase Auth'da kullanıcı oluşturuluyor...");
       UserCredential userCredential = await _auth
           .createUserWithEmailAndPassword(email: email, password: password);
+      print(
+        "AuthService: Firebase Auth kullanıcısı başarıyla oluşturuldu. UID: ${userCredential.user?.uid}",
+      );
 
       // 2. Kullanıcı başarıyla oluşturulduktan SONRA Firestore'a ekle
       if (userCredential.user != null) {
-        print("Auth kullanıcısı oluşturuldu, Firestore'a yazılıyor...");
+        print(
+          "AuthService: Firestore'a kullanıcı verisi yazılacak. UID: ${userCredential.user!.uid}, Email: $email",
+        );
         try {
           // 'users' koleksiyonuna yeni bir doküman ekle
           // Doküman ID'si olarak kullanıcının UID'sini kullan
@@ -57,24 +69,48 @@ class AuthService {
             // TODO: 'username', 'bio', 'profilePicUrl' gibi alanlar eklenebilir
           });
           print(
-            "Kullanıcı Firestore'a başarıyla eklendi: ${userCredential.user!.uid}",
+            // BAŞARI LOGU
+            "AuthService: Kullanıcı Firestore'a başarıyla eklendi: ${userCredential.user!.uid}",
           );
         } catch (firestoreError) {
-          print("Firestore'a yazma hatası: $firestoreError");
+          // FİRESTORE YAZMA HATASI
+          print(
+            "AuthService: Firestore'a yazma sırasında ÖNEMLİ HATA: $firestoreError",
+          );
+          print(
+            "AuthService: Firestore Hatasının Tipi: ${firestoreError.runtimeType}",
+          );
+          // Hatanın detaylarını görmek için
+          if (firestoreError is FirebaseException) {
+            print("AuthService: Firestore Hata Kodu: ${firestoreError.code}");
+            print(
+              "AuthService: Firestore Hata Mesajı: ${firestoreError.message}",
+            );
+          }
           // Opsiyonel: Firestore hatası durumunda Auth kullanıcısını silmeyi düşünebilirsin
+          // print("AuthService: Firestore hatası nedeniyle Auth kullanıcısı siliniyor...");
           // await userCredential.user?.delete();
-          // return null; // veya hatayı tekrar fırlat
+          // print("AuthService: Auth kullanıcısı silindi.");
+          // return null;
         }
       } else {
-        print("Auth kullanıcısı oluşturuldu ama user nesnesi null geldi?");
+        print(
+          "AuthService: Auth kullanıcısı oluşturuldu ama user nesnesi (userCredential.user) null geldi?",
+        );
       }
 
       return userCredential; // Auth sonucunu döndür
     } on FirebaseAuthException catch (e) {
-      print("Kayıt Hatası (AuthService): ${e.code} - ${e.message}");
+      // AUTH KAYIT HATASI
+      print(
+        "AuthService: FirebaseAuthException (Kayıt Hatası): ${e.code} - ${e.message}",
+      );
       return null;
     } catch (e) {
-      print("Beklenmedik Kayıt Hatası (AuthService): $e");
+      // DİĞER BEKLENMEDİK HATALAR
+      print(
+        "AuthService: createUserWithEmailAndPassword içinde Beklenmedik Hata: $e",
+      );
       return null;
     }
   }
@@ -83,8 +119,9 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _auth.signOut();
+      print("AuthService: Kullanıcı çıkış yaptı.");
     } catch (e) {
-      print("Çıkış Yapma Hatası (AuthService): $e");
+      print("AuthService: Çıkış Yapma Hatası: $e");
     }
   }
 

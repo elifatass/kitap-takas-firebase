@@ -5,9 +5,10 @@ import 'package:kitap_takas_firebase/services/auth_service.dart';
 import 'package:kitap_takas_firebase/services/firestore_service.dart';
 import 'package:kitap_takas_firebase/models/book_model.dart';
 import 'package:kitap_takas_firebase/widgets/book_card.dart';
-import 'book_detail_screen.dart'; // BookDetailScreen importu eklendi/aktif edildi
-// TODO: Kitap ekleme ekranını import edeceğiz
+import 'book_detail_screen.dart';
 import 'add_book_screen.dart';
+import 'my_offers_screen.dart';
+import 'my_sent_offers_screen.dart'; // MySentOffersScreen importu eklendi
 
 class HomeScreen extends StatelessWidget {
   HomeScreen({Key? key}) : super(key: key);
@@ -16,31 +17,44 @@ class HomeScreen extends StatelessWidget {
   final FirestoreService _firestoreService = FirestoreService();
   final User? _currentUser = FirebaseAuth.instance.currentUser;
 
-  // Çıkış yapma fonksiyonu (Aynı kaldı)
   void _signOut(BuildContext context) async {
     print("AppBar Çıkış Yap butonuna basıldı.");
     await _authService.signOut();
   }
 
-  // Kitap ekleme sayfasına gitme fonksiyonu (Aynı kaldı)
   void _goToAddBookScreen(BuildContext context) {
     print("Kitap Ekle butonuna basıldı.");
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => const AddBookScreen()),
     );
-    // Navigator.push(context, MaterialPageRoute(builder: (context) => AddBookScreen()));
   }
 
-  // Kitap detay sayfasına gitme fonksiyonu (GÜNCELLENDİ)
   void _goToBookDetail(BuildContext context, String bookId) {
     print(
       "Kitap kartına tıklandı, ID: $bookId -> Detay ekranına yönlendiriliyor.",
     );
-    // Navigator ile BookDetailScreen'e git ve bookId'yi gönder
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => BookDetailScreen(bookId: bookId)),
+    );
+  }
+
+  void _goToMyOffersScreen(BuildContext context) {
+    // Gelen Teklifler
+    print("Gelen Tekliflerim ikonuna basıldı.");
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MyOffersScreen()),
+    );
+  }
+
+  // YENİ FONKSİYON: Gönderdiğim Teklifler ekranına git
+  void _goToMySentOffersScreen(BuildContext context) {
+    print("Gönderdiğim Teklifler ikonuna basıldı.");
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const MySentOffersScreen()),
     );
   }
 
@@ -51,7 +65,6 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        // AppBar (Aynı kaldı)
         title: Text(
           'KitapDünyası Takas',
           style: TextStyle(
@@ -69,6 +82,24 @@ class HomeScreen extends StatelessWidget {
             onPressed: () {
               print("Arama ikonuna basıldı.");
             },
+          ),
+          // Gelen Teklifler İkonu
+          IconButton(
+            icon: Icon(
+              Icons.notifications_none_outlined,
+              color: colorScheme.onSurfaceVariant,
+            ),
+            tooltip: 'Gelen Teklifler',
+            onPressed: () => _goToMyOffersScreen(context),
+          ),
+          // YENİ İKON: Gönderdiğim Teklifler
+          IconButton(
+            icon: Icon(
+              Icons.outbox_outlined,
+              color: colorScheme.onSurfaceVariant,
+            ), // Örnek ikon
+            tooltip: 'Gönderdiğim Teklifler',
+            onPressed: () => _goToMySentOffersScreen(context),
           ),
           IconButton(
             icon: Icon(
@@ -88,7 +119,6 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
       body: Padding(
-        // Body (Aynı kaldı)
         padding: const EdgeInsets.symmetric(horizontal: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,7 +139,6 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             TextField(
-              // Arama çubuğu (Aynı kaldı)
               decoration: InputDecoration(
                 hintText: 'Kitap adı, yazar veya ISBN ara...',
                 prefixIcon: const Icon(Icons.search, size: 20),
@@ -131,7 +160,6 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             SizedBox(
-              // Kategoriler (Aynı kaldı)
               height: 40,
               child: ListView(
                 scrollDirection: Axis.horizontal,
@@ -146,13 +174,11 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             const Text(
-              // Kitap Listesi Başlığı (Aynı kaldı)
               'Öne Çıkanlar',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 10),
             Expanded(
-              // Kitap Listesi Alanı - StreamBuilder (Aynı kaldı, BookCard içindeki onTap güncellendi)
               child: StreamBuilder<QuerySnapshot>(
                 stream: _firestoreService.getAvailableBooksStream(),
                 builder: (context, snapshot) {
@@ -193,11 +219,7 @@ class HomeScreen extends StatelessWidget {
                       final book = Book.fromFirestore(doc);
                       return BookCard(
                         book: book,
-                        onTap:
-                            () => _goToBookDetail(
-                              context,
-                              book.id,
-                            ), // Burası önemli, tıklanınca _goToBookDetail çağrılıyor
+                        onTap: () => _goToBookDetail(context, book.id),
                       );
                     },
                   );
@@ -208,7 +230,6 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        // FAB (Aynı kaldı)
         onPressed: () => _goToAddBookScreen(context),
         tooltip: 'Yeni Kitap Ekle',
         child: const Icon(Icons.add),
@@ -216,7 +237,6 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  // Kategori Chip'i metodu (Aynı kaldı)
   Widget _buildCategoryChip(
     BuildContext context,
     String label,
