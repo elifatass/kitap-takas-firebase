@@ -7,9 +7,8 @@ class Offer {
   final String targetBookOwnerId;
   final String status; // 'pending', 'accepted', 'rejected'
   final Timestamp createdAt;
-  // İleride eklenecekler:
-  // final List<String>? offeredBookIds;
-  // final String? message;
+  final String?
+  offeredByMeBookId; // YENİ ALAN EKLENDİ VE CONSTRUCTOR/FROMFIRESTORE'A DAHİL EDİLDİ
 
   Offer({
     required this.id,
@@ -18,6 +17,7 @@ class Offer {
     required this.targetBookOwnerId,
     required this.status,
     required this.createdAt,
+    this.offeredByMeBookId, // Constructor'a eklendi
   });
 
   factory Offer.fromFirestore(DocumentSnapshot doc) {
@@ -29,6 +29,21 @@ class Offer {
       targetBookOwnerId: data['targetBookOwnerId'] ?? '',
       status: data['status'] ?? 'unknown',
       createdAt: data['createdAt'] ?? Timestamp.now(),
+      offeredByMeBookId:
+          data['offeredByMeBookId'] as String?, // Firestore'dan oku
     );
+  }
+
+  // Firestore'a yazmak için Map (Eğer FirestoreService dışında kullanılacaksa)
+  Map<String, dynamic> toFirestore() {
+    return {
+      'offeringUserId': offeringUserId,
+      'targetBookId': targetBookId,
+      'targetBookOwnerId': targetBookOwnerId,
+      'status': status,
+      'createdAt': createdAt,
+      if (offeredByMeBookId != null)
+        'offeredByMeBookId': offeredByMeBookId, // Sadece null değilse ekle
+    };
   }
 }
