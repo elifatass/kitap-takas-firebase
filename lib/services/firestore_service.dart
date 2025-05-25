@@ -40,9 +40,26 @@ class FirestoreService {
     }
   }
 
+  // Tüm takasa uygun kitapları getir (Ana sayfa için)
   Stream<QuerySnapshot> getAvailableBooksStream() {
     return _booksCollection
         .where('isAvailable', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  // YENİ EKLENEN FONKSİYON: Mevcut kullanıcının takasa uygun kitaplarını getir
+  Stream<QuerySnapshot> getAvailableBooksOfCurrentUserStream() {
+    String? currentUserId = _auth.currentUser?.uid;
+    if (currentUserId == null) {
+      return Stream.empty(); // Kullanıcı giriş yapmamışsa boş stream
+    }
+    // 'books' koleksiyonunda, 'ownerId' alanı mevcut kullanıcının UID'sine eşit olan
+    // VE 'isAvailable' alanı true olan dokümanları getir,
+    // oluşturulma zamanına göre en yeniden eskiye doğru sırala.
+    return _booksCollection
+        .where('ownerId', isEqualTo: currentUserId)
+        .where('isAvailable', isEqualTo: true) // Sadece takasa uygun olanlar
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
@@ -60,6 +77,7 @@ class FirestoreService {
 
   // --- Kullanıcı Profili İşlemleri ---
   Future<DocumentSnapshot?> getUserProfile(String uid) async {
+    // ... (öncekiyle aynı) ...
     try {
       DocumentSnapshot doc = await _usersCollection.doc(uid).get();
       return doc.exists ? doc : null;
@@ -70,6 +88,7 @@ class FirestoreService {
   }
 
   Future<void> updateUserProfile(String uid, Map<String, dynamic> data) async {
+    // ... (öncekiyle aynı) ...
     try {
       await _usersCollection.doc(uid).update(data);
       print("Profil başarıyla güncellendi.");
@@ -80,24 +99,34 @@ class FirestoreService {
   }
 
   // --- Takas Teklif İşlemleri ---
+  // createOffer fonksiyonuna teklif edilen kitap ID'si eklenecek (bir sonraki adımda)
   Future<void> createOffer({
     required String targetBookId,
     required String targetBookOwnerId,
+    String?
+    offeredByMeBookId, // YENİ: Teklif eden kişinin sunduğu kitabın ID'si
   }) async {
     String? offeringUserId = _auth.currentUser?.uid;
     if (offeringUserId == null)
       throw Exception("Teklif oluşturmak için kullanıcı girişi gerekli.");
     if (offeringUserId == targetBookOwnerId)
       throw Exception("Kendi kitabınıza takas teklifi yapamazsınız.");
+
+    // offeredByMeBookId'nin null olmaması durumunu da kontrol edebiliriz (şimdilik opsiyonel)
+    if (offeredByMeBookId == null) {
+      throw Exception("Lütfen takas için bir kitap seçin.");
+    }
+
     try {
       await _offersCollection.add({
         'offeringUserId': offeringUserId,
         'targetBookId': targetBookId,
         'targetBookOwnerId': targetBookOwnerId,
+        'offeredByMeBookId': offeredByMeBookId, // YENİ ALAN EKLENDİ
         'status': 'pending',
         'createdAt': Timestamp.now(),
       });
-      print("Takas teklifi başarıyla oluşturuldu.");
+      print("Takas teklifi başarıyla oluşturuldu (karşılıklı kitap ile).");
     } catch (e) {
       print("Takas teklifi oluşturma hatası: $e");
       throw Exception("Takas teklifi gönderilirken bir hata oluştu: $e");
@@ -106,6 +135,7 @@ class FirestoreService {
 
   // Kullanıcıya GELEN bekleyen teklifleri getir
   Stream<QuerySnapshot> getPendingOffersForUserStream() {
+    // ... (öncekiyle aynı) ...
     String? currentUserId = _auth.currentUser?.uid;
     if (currentUserId == null) return Stream.empty();
     return _offersCollection
@@ -116,16 +146,35 @@ class FirestoreService {
   }
 
   // Teklifi Kabul Etme
-  Future<void> acceptOffer(String offerId, String offeredBookId) async {
+  Future<void> acceptOffer(
+    String offerId,
+    String targetBookId,
+    String? offeredByMeBookIdIfAny,
+  ) async {
     try {
       WriteBatch batch = _firestore.batch();
       DocumentReference offerRef = _offersCollection.doc(offerId);
       batch.update(offerRef, {'status': 'accepted'});
-      DocumentReference bookRef = _booksCollection.doc(offeredBookId);
-      batch.update(bookRef, {'isAvailable': false});
+
+      // Teklif yapılan (hedef) kitabın durumu 'false' yapılıyor
+      DocumentReference targetBookRef = _booksCollection.doc(targetBookId);
+      batch.update(targetBookRef, {'isAvailable': false});
+
+      // Eğer teklif eden de bir kitap sunduysa (offeredByMeBookIdIfAny null değilse),
+      // o kitabın da durumunu 'false' yap
+      if (offeredByMeBookIdIfAny != null) {
+        DocumentReference offeredByMeBookRef = _booksCollection.doc(
+          offeredByMeBookIdIfAny,
+        );
+        batch.update(offeredByMeBookRef, {'isAvailable': false});
+        print(
+          "Karşılık teklif edilen kitap ($offeredByMeBookIdIfAny) da takasta değil olarak işaretlendi.",
+        );
+      }
+
       await batch.commit();
       print(
-        "Teklif ($offerId) kabul edildi ve kitap ($offeredBookId) durumu güncellendi.",
+        "Teklif ($offerId) kabul edildi ve ilgili kitap(lar)ın durumu güncellendi.",
       );
     } catch (e) {
       print("Teklif kabul etme hatası: $e");
@@ -135,6 +184,7 @@ class FirestoreService {
 
   // Teklifi Reddetme
   Future<void> rejectOffer(String offerId) async {
+    // ... (öncekiyle aynı) ...
     try {
       await _offersCollection.doc(offerId).update({'status': 'rejected'});
       print("Teklif ($offerId) reddedildi.");
@@ -144,19 +194,14 @@ class FirestoreService {
     }
   }
 
-  // YENİ EKLENEN FONKSİYON: Kullanıcının YAPTIĞI teklifleri getir (tüm durumlar)
+  // Kullanıcının YAPTIĞI teklifleri getir (tüm durumlar)
   Stream<QuerySnapshot> getOffersMadeByUserStream() {
+    // ... (öncekiyle aynı) ...
     String? currentUserId = _auth.currentUser?.uid;
-    if (currentUserId == null) {
-      return Stream.empty(); // Kullanıcı giriş yapmamışsa boş stream
-    }
-    // 'offers' koleksiyonunda, 'offeringUserId' alanı mevcut kullanıcının UID'sine eşit olan
-    // tüm dokümanları getir, oluşturulma zamanına göre en yeniden eskiye doğru sırala.
+    if (currentUserId == null) return Stream.empty();
     return _offersCollection
         .where('offeringUserId', isEqualTo: currentUserId)
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
-
-  // TODO: Teklif durumunu güncelleme (kabul/ret) fonksiyonu eklenecek (aslında accept ve reject olarak eklendi)
 }
